@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sunflowers - dibujo generado</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; min-height: 100%;
+    background: #000;
+    display: flex; align-items: center; justify-content: center;
+    font-family: system-ui, sans-serif;
+  }
+  #status {
+    position: fixed; top: 12px; left: 12px;
+    color: #aaa; font-size: 13px;
+  }
+  canvas {
+    width: min(95vw, 95vh);
+    height: auto;
+    max-height: 95vh;
+    background: #000;
+  }
+</style>
+</head>
+<body>
+<div id="status">Cargando...</div>
+<canvas id="c"></canvas>
+<script>
+const DURATION_MS = 30000;
+
+async function main() {
+  const status = document.getElementById('status');
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const response = await fetch('sunflowers.json');
+  if (!response.ok) throw new Error(`No se pudo cargar sunflowers.json: ${response.status}`);
+  const regions = await response.json();
+
+  let maxX = 0, maxY = 0;
+  for (const region of regions) {
+    for (const [x, y] of region.contour) {
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+  }
+
+  const width = maxX + 1;
+  const height = maxY + 1;
+  canvas.width = width;
+  canvas.height = height;
+
+  const pixels = [];
+  for (const region of regions) {
+    const [r, g, b] = region.color.map(value => Math.max(0, Math.min(255, Math.round(value))));
+    for (const [x, y] of region.contour) pixels.push(x, y, r, g, b);
+  }
+
+  const totalPoints = pixels.length / 5;
+  const image = ctx.createImageData(width, height);
+  let drawn = 0;
+  let startTime = null;
+
+  function step(timestamp) {
+    if (startTime === null) startTime = timestamp;
+    const fraction = Math.min(1, (timestamp - startTime) / DURATION_MS);
+    const target = Math.floor(fraction * totalPoints);
+    for (let i = drawn; i < target; i++) {
+      const offset = i * 5;
+      const pixel = (pixels[offset + 1] * width + pixels[offset]) * 4;
+      image.data[pixel] = pixels[offset + 2];
+      image.data[pixel + 1] = pixels[offset + 3];
+      image.data[pixel + 2] = pixels[offset + 4];
+      image.data[pixel + 3] = 255;
+    }
+    drawn = target;
+    ctx.putImageData(image, 0, 0);
+    status.textContent = `Generando... ${Math.round(fraction * 100)}%`;
+    if (fraction < 1) requestAnimationFrame(step);
+    else status.remove();
+  }
+
+  requestAnimationFrame(step);
+}
+
+main().catch(error => {
+  console.error(error);
+  document.getElementById('status').textContent = 'No se pudo generar el dibujo de los girasoles.';
+});
+</script>
+</body>
+</html>
